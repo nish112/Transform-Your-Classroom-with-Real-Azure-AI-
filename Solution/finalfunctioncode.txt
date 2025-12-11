@@ -1,0 +1,44 @@
+const { TextAnalyticsClient, AzureKeyCredential } = require("@azure/ai-text-analytics");
+const { BlobServiceClient } = require("@azure/storage-blob");
+
+module.exports = async function (context, myBlob) {
+    context.log(`Processing blob: ${context.bindingData.blobTrigger}, Size: ${myBlob.length} bytes`);
+
+    try {
+        const feedback = myBlob.toString();
+        const textAnalyticsClient = new TextAnalyticsClient(
+            process.env["AZURE_TEXT_ANALYTICS_ENDPOINT"],
+            new AzureKeyCredential(process.env["AZURE_TEXT_ANALYTICS_KEY"])
+        );
+
+        // PII Detection
+        const [piiResult] = await textAnalyticsClient.recognizePiiEntities([feedback]);
+        const sanitizedText = piiResult.redactedText;
+
+        // Sentiment Analysis
+        const [sentimentResult] = await textAnalyticsClient.analyzeSentiment([sanitizedText]);
+        const sentimentScore = sentimentResult.confidenceScores.positive;
+
+        // Determine sentiment category
+        const sentimentCategory = sentimentScore > 0.5 ? 'positive' : sentimentScore < 0.5 ? 'negative' : 'neutral';
+
+        // Prepare the output data
+        const outputData = {
+            feedback: sanitizedText,
+            sentimentScore: sentimentScore,
+            sentimentCategory: sentimentCategory
+        };
+
+        // Save to Azure Blob Storage
+        const blobServiceClient = BlobServiceClient.fromConnectionString(process.env["AZURE_STORAGE_CONNECTION_STRING"]);
+        const containerClient = blobServiceClient.getContainerClient("processed-feedback");
+        const blobName = `processed-${context.bindingData.blobTrigger}`;
+        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+        await blockBlobClient.upload(JSON.stringify(outputData), Buffer.byteLength(JSON.stringify(outputData)));
+
+        context.log("Feedback processed and stored in Azure Blob Storage.");
+    } catch (error) {
+        context.log.error("Error processing feedback:", error);
+    }
+};

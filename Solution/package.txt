@@ -1,0 +1,14 @@
+{
+  "name": "BlobTrigger1",
+  "version": "1.0.0",
+  "description": "Azure Function to process feedback",
+  "main": "index.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/ai-text-analytics": "^5.1.0",
+    "@azure/cosmos": "^3.9.0",
+    "@azure/storage-blob": "^12.10.0"
+  }
+}
